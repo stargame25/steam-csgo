@@ -10,8 +10,8 @@ from steam import webapi
 from steam.core.cm import CMServerList
 from steam.core.crypto import rsa_publickey, pkcs1v15_encrypt
 
-from util import csgo_misc, steam_misc
-from webauth import WebAuth
+from .util import csgo_misc, steam_misc
+from .webauth import WebAuth
 
 
 class CSGOApi(object):

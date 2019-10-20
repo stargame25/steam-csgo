@@ -1,7 +1,7 @@
-__version__ = "0.3.3"
+__version__ = "1.0.1"
 __author__ = "Andriy Herasymchuk"
 
-version_info = (0, 3, 3)
+version_info = (1,0,1)
 
 import sys
 
