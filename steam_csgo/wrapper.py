@@ -15,8 +15,7 @@ from .webauth import WebAuth
 
 
 class CSGOApi(object):
-    def __init__(self, username, _api_key=None, _api_domain='csgohelper'):
-        self.username = username
+    def __init__(self, _api_key=None, _api_domain='csgohelper'):
         self.webclient = None
         self.api_interface = None
         self.session_id = None
@@ -57,8 +56,11 @@ class CSGOApi(object):
     def login_in(self, username='', password='', timestamp='', captcha='', captcha_gid=-1,
                  email_code='', steam_id='', twofactor_code='', language='english'):
         self.webclient = WebAuth()
-        return self.webclient.login_raw(username, password, timestamp, captcha, captcha_gid,
-                                        email_code, steam_id, twofactor_code, language)
+        response = self.webclient.login_raw(username, password, timestamp, captcha, captcha_gid,
+                                            email_code, steam_id, twofactor_code, language)
+        if self.webclient.logged_on:
+            self.username = username
+        return response
 
     def main(self):
         self.session_id = self.webclient.session_id
@@ -358,41 +360,16 @@ class CSGOApi(object):
             else:
                 return -1
 
-    def cli_login_in(self, password):
-        self.webclient = WebAuth()
-        rsa = WebAuth.get_rsa(self.username)
+    def cli_login_in(self, username, password):
+        rsa = WebAuth.get_rsa(username)
         key = rsa_publickey(int(rsa['publickey_mod'], 16),
                             int(rsa['publickey_exp'], 16))
-        self.webclient.login_raw(self.username, b64encode(pkcs1v15_encrypt(key, password.encode('ascii'))),
-                                 rsa['timestamp'])
-
-    def cli_main(self):
-        self.session_id = self.webclient.session_id
-        self.steamid = str(self.webclient.steam_id.as_64)
-        self.comm_link = self.webclient.get_(self.webclient.steam_id.community_url).url
-        if self.comm_link[-1] != '/':
-            self.comm_link += '/'
-        elif '/home/' in self.comm_link:
-            self.comm_link = self.comm_link.replace("/home/", "/")
-        print("Steam ID: " + self.steamid)
-        print("Link: " + self.comm_link)
-        if not self.api_key:
-            self.api_key = self.get_api_key()
-            if self.api_key:
-                self.api_interface = webapi.WebAPI(self.api_key)
-                self.limited = False
-                print(self.api_key)
-            else:
-                self.limited = True
-                print("Limited account")
-        print("Program start time: " + str(datetime.datetime.now().time()))
-        games = self.load_all_games()
-        me = self.load_me_full()
+        self.login_in(username, b64encode(pkcs1v15_encrypt(key, password.encode('ascii'))), rsa['timestamp'])
 
 
 if __name__ == '__main__':
     username = input("username: ")
     password = input("password: ")
-    cli = CSGOApi(username)
-    cli.cli_login_in(password)
-    cli.cli_main()
+    cli = CSGOApi()
+    cli.cli_login_in(username, password)
+    cli.main()
