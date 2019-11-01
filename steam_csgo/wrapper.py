@@ -9,6 +9,12 @@ from steam import steamid as steamidapi
 from steam import webapi
 from steam.core.cm import CMServerList
 from steam.core.crypto import rsa_publickey, pkcs1v15_encrypt
+from steam.webauth import (
+    TwoFactorCodeRequired,
+    CaptchaRequired,
+    CaptchaRequiredLoginIncorrect,
+    EmailCodeRequired
+)
 
 from .util import csgo_misc, steam_misc
 from .webauth import WebAuth
@@ -70,13 +76,7 @@ class CSGOApi(object):
             self.comm_link += '/'
         elif '/home/' in self.comm_link:
             self.comm_link = self.comm_link.replace('/home/', '/')
-        if not self.api_key:
-            self.api_key = self.get_api_key()
-            if self.api_key:
-                self.api_interface = webapi.WebAPI(self.api_key)
-                self.limited = False
-            else:
-                self.limited = True
+        self.load_api_key()
         me = self.load_me_full()
         games = self.load_all_games()
         return (me, games)
@@ -97,6 +97,14 @@ class CSGOApi(object):
             })
             return self.get_api_key()
 
+    def load_api_key(self):
+        self.limited = True
+        self.api_key = self.get_api_key()
+        if self.api_key:
+            self.limited = False
+            self.api_interface = webapi.WebAPI(self.api_key)
+        return self.api_key
+
     def load_all_games(self):
         csgo_games = {}
         for mode in self.gamemodes:
@@ -109,27 +117,19 @@ class CSGOApi(object):
         games = []
         while continue_token is not None:
             match_dict = self.get_games_history(gamemode, self.session_id, continue_token)
-            data = self.parse_games(gamemode, match_dict["html"])
-            for game in data:
-                if self.check_for_new(game["info"]["date"], date):
-                    games.append(game)
-                    games_count += 1
-            continue_token = match_dict["continue_token"]
-        return games
-
-    def load_games(self, gamemode):
-        continue_token = 0
-        games = []
-        while continue_token is not None:
-            match_dict = self.get_games_history(gamemode, self.session_id, continue_token)
             if match_dict and match_dict.get("html"):
                 data = self.parse_games(gamemode, match_dict.get('html'))
             else:
                 return []
             for game in data:
-                games.append(game)
+                if self.check_for_new(game["info"]["date"], date):
+                    games.append(game)
+                    games_count += 1
             continue_token = match_dict.get("continue_token")
         return games
+
+    def load_games(self, gamemode):
+        return self.load_new_games(gamemode)
 
     def load_me_full(self):
         return {"me": self.load_me(), "matchmaking_data": self.load_matchmaking_data(),
@@ -364,7 +364,12 @@ class CSGOApi(object):
         rsa = WebAuth.get_rsa(username)
         key = rsa_publickey(int(rsa['publickey_mod'], 16),
                             int(rsa['publickey_exp'], 16))
-        self.login_in(username, b64encode(pkcs1v15_encrypt(key, password.encode('ascii'))), rsa['timestamp'])
+        try:
+            self.login_in(username, b64encode(pkcs1v15_encrypt(key, password.encode('ascii'))), rsa['timestamp'])
+        except TwoFactorCodeRequired:
+            code = input("twofactor: ")
+            self.login_in(username, b64encode(pkcs1v15_encrypt(key, password.encode('ascii'))), rsa['timestamp'],
+                          twofactor_code=code)
 
 
 if __name__ == '__main__':
@@ -372,4 +377,5 @@ if __name__ == '__main__':
     password = input("password: ")
     cli = CSGOApi()
     cli.cli_login_in(username, password)
+    cli.load_api_key()
     cli.main()
